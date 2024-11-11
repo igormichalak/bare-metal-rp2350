@@ -79,6 +79,41 @@ address_mapping_table:
 
 .word 0 # null terminator
 
+####################
+### Program Info ###
+####################
+
+.equ BINARY_INFO_RPI_TAG, 0x5052
+.equ BINARY_INFO_TYPE_ID_AND_STRING, 6
+.equ BINARY_INFO_ID_PROGRAM_NAME, 0x02031c86
+.equ BINARY_INFO_ID_PROGRAM_URL, 0x1856239a
+
+.section .binary_info.keep.default, "a"
+.word bi_program_name
+.word bi_program_url
+
+.section .rodata, "a"
+
+bi_program_name:
+.hword	BINARY_INFO_TYPE_ID_AND_STRING
+.hword	BINARY_INFO_RPI_TAG
+.word	BINARY_INFO_ID_PROGRAM_NAME
+.word	program_name
+
+bi_program_url:
+.hword	BINARY_INFO_TYPE_ID_AND_STRING
+.hword	BINARY_INFO_RPI_TAG
+.word	BINARY_INFO_ID_PROGRAM_URL
+.word	program_url
+
+program_name:
+.asciz	"Bare Metal RP2350"
+.p2align 2, 0
+
+program_url:
+.asciz "https://github.com/igormichalak/bare-metal-rp2350"
+.p2align 2, 0
+
 #######################
 ### ELF Entry Point ###
 #######################
