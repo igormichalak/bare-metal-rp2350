@@ -81,6 +81,7 @@ address_mapping_table:
 
 ####################
 ### Program Info ###
+### (optional)   ###
 ####################
 
 .equ BINARY_INFO_RPI_TAG, 0x5052
