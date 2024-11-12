@@ -33,7 +33,7 @@ clean:
 	rm -f $(OBJECTS) $(TARGET_ELF) $(TARGET_UF2)
 
 .PHONY: flash_jlink
-flash_jlink:
+flash_jlink: $(TARGET_ELF)
 	$(OPENOCD) -f interface/jlink.cfg -f target/rp2350-riscv.cfg \
 			   -c "adapter speed 4000" \
 			   -c "program $(TARGET_ELF) verify reset exit"
