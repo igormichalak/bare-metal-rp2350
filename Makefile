@@ -2,9 +2,9 @@
 PROGRAM_NAME = blink
 UF2_FAMILY_ID = 0xe48bff5a
 
-# Compiler and linker
 AS = riscv32-unknown-elf-as
 LD = riscv32-unknown-elf-ld
+OPENOCD = rpi-openocd
 
 # Flags
 ASFLAGS = -march=rv32imac_zicsr_zifencei_zba_zbb_zbkb_zbs -g
@@ -31,4 +31,10 @@ $(TARGET_UF2): $(TARGET_ELF)
 .PHONY: clean
 clean:
 	rm -f $(OBJECTS) $(TARGET_ELF) $(TARGET_UF2)
+
+.PHONY: flash_jlink
+flash_jlink:
+	$(OPENOCD) -f interface/jlink.cfg -f target/rp2350-riscv.cfg \
+			   -c "adapter speed 4000" \
+			   -c "program $(TARGET_ELF) verify reset exit"
 
