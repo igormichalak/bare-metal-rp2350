@@ -57,10 +57,10 @@ main:
 	li		t2, SIO_GPIO_OUT_CLR
 loop:
 	sw		t0, (t1)
-	li		a0, 200
+	li		a0, 1000
 	call	wait_ms
 	sw		t0, (t2)
-	li		a0, 200
+	li		a0, 1000
 	call	wait_ms
 	j		loop
 

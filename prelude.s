@@ -132,6 +132,7 @@ _entry_point:
 .section .text
 .global _reset_handler
 _reset_handler:
+# Load data from FLASH to RAM.
 	la		t0, address_mapping_table
 1:
 	lw		a0, 0(t0)
@@ -142,11 +143,17 @@ _reset_handler:
 	addi	t0, t0, 12
 	j		1b
 2:
+# Zero out the .bss section.
 	la		a0, __bss_start
 	la		a1, __bss_end
 	call	bss_fill
+# Next 4 calls are optional.
+# They set up a faster clock configuration.
 	call	init_xosc
 	call	init_pll
+	call	configure_clk_ref
+	call	configure_clk_sys
+# Application entry point.
 	j		main
 
 data_cpy_loop:
@@ -209,17 +216,17 @@ init_xosc:
 .equ RESETS_RESET_DONE,	RESETS_BASE+0x8
 
 init_pll:
-	# Bring PLL_SYS out of reset
+# Bring PLL_SYS out of reset
 	li		a0, (1<<14)
 	li		a1, RESETS_RESET+ATOMIC_CLEAR
-	sw		a0, (t1)
+	sw		a0, (a1)
 	li		a1, RESETS_RESET_DONE
 1:
 	lw		a2, (a1)
 	and		a2, a2, a0
 	bne		a2, a0, 1b
 
-	# Set FBDIV
+# Set FBDIV
 	li		a1, PLL_SYS_FBDIV_INT
 	lw		a0, (a1)
 	li		a2, (~0x00000fff)
@@ -227,19 +234,19 @@ init_pll:
 	ori		a0, a0, 105 # VCO = 1260 MHz
 	sw		a0, (a1)
 
-	# Turn on PLL and PLL VCO
+# Turn on PLL and PLL VCO
 	li		a0, (1<<5)|(1<<0)
 	li		a1,	PLL_SYS_PWR+ATOMIC_CLEAR
 	sw		a0, (a1)
 
-	# Wait for PLL to lock
+# Wait for PLL to lock
 	li		a0, PLL_SYS_CS
 1:
 	lw		a1, (a0)
 	bexti	a1, a1, 31 # Extract LOCK bit
 	beqz	a1, 1b
 
-	# Set up post dividers
+# Set up post dividers
 	li		a1, PLL_SYS_PRIM
 	lw		a0, (a1)
 	li		a2, (~0x00077000)
@@ -248,9 +255,48 @@ init_pll:
 	or		a0, a0, a2
 	sw		a0, (a1)
 
-	# Turn on PLL post dividers
+# Turn on PLL post dividers
 	li		a0, (1<<3)
 	li		a1,	PLL_SYS_PWR+ATOMIC_CLEAR
 	sw		a0, (a1)
+	ret
+
+.equ CLOCKS_BASE,				0x40010000
+.equ CLOCKS_CLK_REF_CTRL,		CLOCKS_BASE+0x30
+.equ CLOCKS_CLK_REF_SELECTED,	CLOCKS_BASE+0x38
+.equ CLOCKS_CLK_SYS_CTRL,		CLOCKS_BASE+0x3c
+.equ CLOCKS_CLK_SYS_SELECTED,	CLOCKS_BASE+0x44
+
+configure_clk_ref:
+# Select XOSC as the source.
+	li		a1, CLOCKS_CLK_REF_CTRL
+	lw		a0, (a1)
+	li		a2, (~0x00000003)
+	and		a0, a0, a2
+	ori		a0, a0, 0x2
+	sw		a0, (a1)
+
+# Wait for XOSC to get selected. 
+	li		a0, CLOCKS_CLK_REF_SELECTED
+	li		a1, 0b0100
+1:
+	lw		a2, (a0)
+	andi	a2, a2, 0x00f
+	bne		a2, a1, 1b
+	ret
+
+configure_clk_sys:
+# Select AUX as the source.
+	li		a0, 1
+	li		a1, CLOCKS_CLK_SYS_CTRL+ATOMIC_SET
+	sw		a0, (a1)
+
+# Wait for AUX to get selected. 
+	li		a0, CLOCKS_CLK_SYS_SELECTED
+	li		a1, 0b10
+1:
+	lw		a2, (a0)
+	andi	a2, a2, 0x003
+	bne		a2, a1, 1b
 	ret
 
