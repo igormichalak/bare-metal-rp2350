@@ -138,19 +138,20 @@ _reset_handler:
 	beqz	a0, 2f
 	lw		a1, 4(t0)
 	lw		a2, 8(t0)
-	addi	s0, t0, 12
 	call	data_cpy
-	mv		t0, s0
+	addi	t0, t0, 12
 	j		1b
 2:
 	la		a0, __bss_start
 	la		a1, __bss_end
 	call	bss_fill
+	call	init_xosc
+	call	init_pll
 	j		main
 
 data_cpy_loop:
-	lw		t0, (a0)
-	sw		t0, (a1)
+	lw		a3, (a0)
+	sw		a3, (a1)
 	addi	a0, a0, 4
 	addi	a1, a1, 4
 data_cpy:
@@ -162,5 +163,94 @@ bss_fill_loop:
 	addi	a0, a0, 4
 bss_fill:
 	bltu	a0, a1, bss_fill_loop
+	ret
+
+.equ XOSC_FREQ,		(12 * 1000 * 1000)
+.equ XOSC_BASE,		0x40048000
+.equ XOSC_CTRL,		XOSC_BASE+0x00
+.equ XOSC_STATUS,	XOSC_BASE+0x04
+.equ XOSC_STARTUP,	XOSC_BASE+0x0c
+
+init_xosc:
+	li		a1, XOSC_STARTUP
+	lw		a0, (a1)
+	li		a2, (~0x00003fff)
+	and		a0, a0, a2
+	ori		a0, a0, 469 # 10 ms startup delay
+	sw		a0, (a1)
+
+	li		a1, XOSC_CTRL
+	lw		a0, (a1)
+	li		a2, (~0x00ffffff)
+	and		a0, a0, a2
+	li		a2, 0xfabaa0
+	or		a0, a0, a2
+	sw		a0, (a1)
+
+	li		a0, XOSC_STATUS
+1:
+	lw		a1, (a0)
+	bexti	a1, a1, 31 # Extract STABLE bit
+	beqz	a1, 1b
+	ret
+
+.equ ATOMIC_XOR,	0x1000
+.equ ATOMIC_SET,	0x2000
+.equ ATOMIC_CLEAR,	0x3000
+
+.equ PLL_SYS_BASE,		0x40050000
+.equ PLL_SYS_CS,		PLL_SYS_BASE+0x00
+.equ PLL_SYS_PWR,		PLL_SYS_BASE+0x04
+.equ PLL_SYS_FBDIV_INT,	PLL_SYS_BASE+0x08
+.equ PLL_SYS_PRIM,		PLL_SYS_BASE+0x0c
+
+.equ RESETS_BASE,		0x40020000
+.equ RESETS_RESET,		RESETS_BASE+0x0
+.equ RESETS_RESET_DONE,	RESETS_BASE+0x8
+
+init_pll:
+	# Bring PLL_SYS out of reset
+	li		a0, (1<<14)
+	li		a1, RESETS_RESET+ATOMIC_CLEAR
+	sw		a0, (t1)
+	li		a1, RESETS_RESET_DONE
+1:
+	lw		a2, (a1)
+	and		a2, a2, a0
+	bne		a2, a0, 1b
+
+	# Set FBDIV
+	li		a1, PLL_SYS_FBDIV_INT
+	lw		a0, (a1)
+	li		a2, (~0x00000fff)
+	and		a0, a0, a2
+	ori		a0, a0, 105 # VCO = 1260 MHz
+	sw		a0, (a1)
+
+	# Turn on PLL and PLL VCO
+	li		a0, (1<<5)|(1<<0)
+	li		a1,	PLL_SYS_PWR+ATOMIC_CLEAR
+	sw		a0, (a1)
+
+	# Wait for PLL to lock
+	li		a0, PLL_SYS_CS
+1:
+	lw		a1, (a0)
+	bexti	a1, a1, 31 # Extract LOCK bit
+	beqz	a1, 1b
+
+	# Set up post dividers
+	li		a1, PLL_SYS_PRIM
+	lw		a0, (a1)
+	li		a2, (~0x00077000)
+	and		a0, a0, a2
+	li		a2, (3<<16)|(3<<12)
+	or		a0, a0, a2
+	sw		a0, (a1)
+
+	# Turn on PLL post dividers
+	li		a0, (1<<3)
+	li		a1,	PLL_SYS_PWR+ATOMIC_CLEAR
+	sw		a0, (a1)
 	ret
 
