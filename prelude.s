@@ -153,6 +153,9 @@ _reset_handler:
 	call	init_pll
 	call	configure_clk_ref
 	call	configure_clk_sys
+# Start the system timers,
+# assuming that the clk_ref freq is 12 MHz.
+	call	start_sys_timers
 # Application entry point.
 	j		main
 
@@ -177,6 +180,7 @@ bss_fill:
 .equ XOSC_CTRL,		XOSC_BASE+0x00
 .equ XOSC_STATUS,	XOSC_BASE+0x04
 .equ XOSC_STARTUP,	XOSC_BASE+0x0c
+.equ XOSC_COUNT,	XOSC_BASE+0x10
 
 init_xosc:
 	li		a1, XOSC_STARTUP
@@ -216,7 +220,7 @@ init_xosc:
 .equ RESETS_RESET_DONE,	RESETS_BASE+0x8
 
 init_pll:
-# Bring PLL_SYS out of reset
+# Bring PLL_SYS out of reset.
 	li		a0, (1<<14)
 	li		a1, RESETS_RESET+ATOMIC_CLEAR
 	sw		a0, (a1)
@@ -226,36 +230,36 @@ init_pll:
 	and		a2, a2, a0
 	bne		a2, a0, 1b
 
-# Set FBDIV
+# Set FBDIV.
 	li		a1, PLL_SYS_FBDIV_INT
 	lw		a0, (a1)
 	li		a2, (~0x00000fff)
 	and		a0, a0, a2
-	ori		a0, a0, 105 # VCO = 1260 MHz
+	ori		a0, a0, 125 # VCO = 1500 MHz
 	sw		a0, (a1)
 
-# Turn on PLL and PLL VCO
+# Turn on PLL and PLL VCO.
 	li		a0, (1<<5)|(1<<0)
 	li		a1,	PLL_SYS_PWR+ATOMIC_CLEAR
 	sw		a0, (a1)
 
-# Wait for PLL to lock
+# Wait for PLL to lock.
 	li		a0, PLL_SYS_CS
 1:
 	lw		a1, (a0)
 	bexti	a1, a1, 31 # Extract LOCK bit
 	beqz	a1, 1b
 
-# Set up post dividers
+# Set up post dividers.
 	li		a1, PLL_SYS_PRIM
 	lw		a0, (a1)
 	li		a2, (~0x00077000)
 	and		a0, a0, a2
-	li		a2, (3<<16)|(3<<12)
+	li		a2, (5<<16)|(2<<12)
 	or		a0, a0, a2
 	sw		a0, (a1)
 
-# Turn on PLL post dividers
+# Turn on PLL post dividers.
 	li		a0, (1<<3)
 	li		a1,	PLL_SYS_PWR+ATOMIC_CLEAR
 	sw		a0, (a1)
@@ -299,4 +303,41 @@ configure_clk_sys:
 	andi	a2, a2, 0x003
 	bne		a2, a1, 1b
 	ret
+
+.equ TICKS_BASE,			0x40108000
+.equ TICKS_TIMER0_CTRL,		TICKS_BASE+0x18
+.equ TICKS_TIMER0_CYCLES,	TICKS_BASE+0x1c
+.equ TICKS_TIMER1_CTRL,		TICKS_BASE+0x24
+.equ TICKS_TIMER1_CYCLES,	TICKS_BASE+0x28
+
+start_sys_timers:
+# Bring timers out of reset.
+	li		a0, (1<<24)|(1<<23)
+	li		a1, RESETS_RESET+ATOMIC_CLEAR
+	sw		a0, (a1)
+	li		a1, RESETS_RESET_DONE
+1:
+	lw		a2, (a1)
+	and		a2, a2, a0
+	bne		a2, a0, 1b
+
+# Set up timer0 ticker.
+	li		a1, TICKS_TIMER0_CYCLES
+	lw		a0, (a1)
+	ori		a0, a0, 12
+	sw		a0, (a1)
+
+	li		a1, TICKS_TIMER0_CTRL+ATOMIC_SET
+	li		a0, 1
+	sw		a0, (a1)
+
+# Set up timer1 ticker.
+	li		a1, TICKS_TIMER1_CYCLES
+	lw		a0, (a1)
+	ori		a0, a0, 12
+	sw		a0, (a1)
+
+	li		a1, TICKS_TIMER1_CTRL+ATOMIC_SET
+	li		a0, 1
+	sw		a0, (a1)
 
